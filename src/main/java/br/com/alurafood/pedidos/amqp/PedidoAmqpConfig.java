@@ -11,9 +11,30 @@ import org.springframework.context.annotation.Configuration;
 public class PedidoAmqpConfig {
 
     @Bean
+    public Jackson2JsonMessageConverter getJackson2JsonMessageConverter() {
+        return new Jackson2JsonMessageConverter();
+    }
+
+    @Bean
+    public RabbitTemplate getRabbitTemplate(ConnectionFactory connectionFactory,
+                                            Jackson2JsonMessageConverter jackson2JsonMessageConverter){
+        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
+        rabbitTemplate.setMessageConverter(jackson2JsonMessageConverter);
+        return rabbitTemplate;
+    }
+
+    @Bean
     public Queue filaDetalhesPedido(){
         return QueueBuilder
                 .nonDurable("pagamentos.detalhes-pedido")
+                .deadLetterExchange(this.deadLetterExchange().getName())
+                .build();
+    }
+
+    @Bean
+    public Queue filaDlqDetalhesPedido(){
+        return QueueBuilder
+                .nonDurable("pagamentos.detalhes-pedido-dlq")
                 .build();
     }
 
@@ -25,6 +46,13 @@ public class PedidoAmqpConfig {
     }
 
     @Bean
+    public FanoutExchange deadLetterExchange(){
+        return ExchangeBuilder
+                .fanoutExchange("pagamentos.dlx")
+                .build();
+    }
+
+    @Bean
     public Binding bindingPagamentosPedidos(){
         return BindingBuilder
                 .bind(filaDetalhesPedido())
@@ -32,16 +60,10 @@ public class PedidoAmqpConfig {
     }
 
     @Bean
-    public Jackson2JsonMessageConverter getJackson2JsonMessageConverter() {
-        return new Jackson2JsonMessageConverter();
-    }
-
-    @Bean
-    public RabbitTemplate getRabbitTemplate(ConnectionFactory connectionFactory,
-                                            Jackson2JsonMessageConverter jackson2JsonMessageConverter){
-        RabbitTemplate rabbitTemplate = new RabbitTemplate(connectionFactory);
-        rabbitTemplate.setMessageConverter(jackson2JsonMessageConverter);
-        return rabbitTemplate;
+    public Binding bindingDlxPagamentosPedidos(){
+        return BindingBuilder
+                .bind(this.filaDlqDetalhesPedido())
+                .to(this.deadLetterExchange());
     }
 
 }
